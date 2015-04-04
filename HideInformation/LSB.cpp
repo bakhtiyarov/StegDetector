@@ -94,7 +94,7 @@ void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key
 			next2 = getBits(secret.planes[1], curSecretBit, key.k);
 			curSecretBit += key.k;
 			next3 = getBits(secret.planes[2], curSecretBit, key.k);
-			curSecretBit += k;
+			curSecretBit += key.k;
 
 			RgbPixel curPixel = cover.getPixel(x, y);
 
