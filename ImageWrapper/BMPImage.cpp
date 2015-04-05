@@ -55,7 +55,7 @@ void BMPImage::setPixel(size_t x, size_t y, RgbPixel p)
 
 BMPImage::BMPImage(const char* filename)
 {
-	fstream in(filename);
+	ifstream in(filename);
 	if (in.is_open())
 	{
 		head = new BMPHEAD;
@@ -90,7 +90,11 @@ BMPImage::BMPImage(const char* filename)
 		}
 	}
 	else
-		throw FileNameError();
+	{
+		std::string err = "Failed to open file ";
+		err.append(filename);
+		throw FileNameError(err.c_str());
+	}
 }
 
 
@@ -104,5 +108,5 @@ BMPImage::~BMPImage()
 
 
 UnsupportedImageFormatException::UnsupportedImageFormatException(const std::string& str)
-	:errStr(str)
+	:exception(str.c_str())
 {}

@@ -11,16 +11,18 @@ struct RgbPixel
 
 struct BMPHEAD;
 
-class UnsupportedImageFormatException
+class UnsupportedImageFormatException : public std::exception
 {
 public:
-	std::string errStr;
 	UnsupportedImageFormatException(const std::string& str);
 };
 
 
-class FileNameError
-{};
+class FileNameError : public std::exception
+{
+public:
+	FileNameError(const char* err) : std::exception(err){}
+};
 
 struct BMPImage
 {
