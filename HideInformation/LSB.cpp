@@ -2,6 +2,7 @@
 #include <cassert>
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <algorithm>
 
 namespace opts = boost::program_options;
 
@@ -27,10 +28,13 @@ void setLSB(char& c, const vector<bool>& data)
 {
 	assert(data.size() < 8);
 
-	c &= 0xf0;
 	uint8_t k = data.size();
+	
 	for (size_t i = 0; i != k; i++)
-		c |= (data[i] << (k - i));
+	{
+		c &= 0xFE << (k - i - 1);
+		c |= data[i] << (k - i - 1);
+	}
 }
 
 
@@ -48,16 +52,21 @@ vector<bool> getBits(uint8_t* data, uint64_t indexOfFirstBit, uint64_t count)
 
 	vector<bool> result;
 	result.reserve(count);
-	for (int i = indexOfFirstBit; i != 8; i++)
-		result.push_back(data[0] & (0x80 >> i));
 
-	if (count > 8)
+	if (indexOfFirstBit + count > 8)
 	{
+		for (int i = indexOfFirstBit; i != 8; i++)
+			result.push_back(data[0] & (0x80 >> i));
+
 		const vector<bool> tail = getBits(data + 1, 0, count - 8 + indexOfFirstBit);
 		std::copy(tail.cbegin(), tail.cend(), std::back_inserter(result));
 	}
-
-
+	else
+	{
+		for (int i = indexOfFirstBit; i != std::min<size_t>(8, count + indexOfFirstBit); i++)
+			result.push_back(data[0] & (0x80 >> i));
+	}
+	
 	return result;
 }
 
@@ -69,18 +78,16 @@ void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key
 
 	for (size_t y = key.y; y != key.h; y++)
 	{
-		if (curSecretBit / 8 >= secret.getSize())
+		if (curSecretBit * 3 / 8 >= secret.getSize())
 			break;
 		for (size_t x = key.x; x != key.w; x++)
 		{
-			if (curSecretBit / 8 >= secret.getSize())
+			if (curSecretBit * 3 / 8 >= secret.getSize())
 				break;
 
 			vector<bool> next1, next2, next3;
 			next1 = getBits(secret.planes[0], curSecretBit, key.k);
-			curSecretBit += key.k;
 			next2 = getBits(secret.planes[1], curSecretBit, key.k);
-			curSecretBit += key.k;
 			next3 = getBits(secret.planes[2], curSecretBit, key.k);
 			curSecretBit += key.k;
 
@@ -146,7 +153,13 @@ int main(int argc, char** argv)
 		BMPImage secret(secretName.c_str());
 		BMPImage cont(contName.c_str());
 
+		if (!key.h)
+			key.h = cont.height;
+		if (!key.w)
+			key.w = cont.width;
+
 		createLSBImage(cont, secret, key);
+		cont.save(outName.c_str());
 	}
 	catch (std::exception& e)
 	{

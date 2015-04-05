@@ -27,16 +27,22 @@ struct BMPHEAD
 
 std::istream& operator>>(std::istream& in, BMPHEAD& h)
 {
-	in >> h.Signature >> h.FileLength >> h.Zero >> h.Ptr >> h.Version >> h.Width >> h.Height >> h.Planes >> h.BitsPerPixel >>
-		h.Compression >> h.SizeImage >> h.XPelsPerMeter >> h.YPelsPerMeter >> h.ClrUsed >> h.ClrImportant;
+	in.read((char*)&h.Signature, sizeof(h.Signature));
+	in.read((char*)&h.FileLength, sizeof(h.FileLength) * 6);
+	in.read((char*)&h.Planes, sizeof(h.Planes));
+	in.read((char*)&h.BitsPerPixel, sizeof(h.BitsPerPixel));
+	in.read((char*)&h.Compression, sizeof(h.Compression) * 6);
 
 	return in;
 }
 
 std::ostream& operator<<(std::ostream& out, BMPHEAD& h)
 {
-	out << h.Signature << h.FileLength << h.Zero << h.Ptr << h.Version << h.Width << h.Height << h.Planes << h.BitsPerPixel <<
-		h.Compression << h.SizeImage << h.XPelsPerMeter << h.YPelsPerMeter << h.ClrUsed << h.ClrImportant;
+	out.write((char*)&h.Signature, sizeof(h.Signature));
+	out.write((char*)&h.FileLength, sizeof(h.FileLength) * 6);
+	out.write((char*)&h.Planes, sizeof(h.Planes));
+	out.write((char*)&h.BitsPerPixel, sizeof(h.BitsPerPixel));
+	out.write((char*)&h.Compression, sizeof(h.Compression) * 6);
 
 	return out;
 }
@@ -63,19 +69,14 @@ void BMPImage::setPixel(size_t x, size_t y, RgbPixel p)
 
 BMPImage::BMPImage(const char* filename)
 {
-	ifstream in(filename);
-	if (in.is_open())
+	ifstream in;
+	in.open(filename, std::ifstream::binary);
+	if (in.is_open() && !in.fail())
 	{
 		head = new BMPHEAD;
 		in >> *head;
 		in.seekg(head->Ptr);
 
-		//We don't need this
-		head->FileLength -= (head->Ptr - 54);
-		head->Ptr = 54;
-
-		if (head->Planes != 3)
-			throw UnsupportedImageFormatException("Image have unupported count of bit planes; may be this is grayscale image");
 		if (head->BitsPerPixel != 24 && head->BitsPerPixel != 32)
 			throw UnsupportedImageFormatException("Image have unsupported bit depth");
 
@@ -89,22 +90,21 @@ BMPImage::BMPImage(const char* filename)
 		{
 			for (size_t j = 0; j != head->Width; j++)
 			{
-				in >> planes[0][i*width + j];
-				in >> planes[1][i*width + j];
-				in >> planes[2][i*width + j];
+				in.read((char*)&planes[0][i*width + j], 1);
+				in.read((char*)&planes[1][i*width + j], 1);
+				in.read((char*)&planes[2][i*width + j], 1);
 
 				if (head->BitsPerPixel == 32)
 				{
 					uint8_t garbage;
-					in >> garbage;
+					in.read((char*)&garbage, 1);
 				}
 			}
 			if (head->BitsPerPixel != 32)
 			{
-				uint8_t garbage;
+				uint8_t garbage[3];
 				uint8_t tailLen= (width * head->BitsPerPixel) % 32;
-				for (size_t i = 0; i != tailLen; i++)
-					in >> garbage;
+				in.read((char*)garbage, tailLen);
 			}
 		}
 	}
@@ -128,21 +128,30 @@ void BMPImage::save(const char* fileName)
 		throw FileNameError(err.c_str());
 	}
 
+	head->Ptr = 55;
 	out << *head;
 	for (size_t i = 0; i != height; i++)
 	{
 		for (size_t j = 0; j != width; j++)
 		{
-			out << planes[0][i*width + j];
-			out << planes[1][i*width + j];
-			out << planes[2][i*width + j];
+			out.write((char*)&planes[0][i*width + j], 1);
+			out.write((char*)&planes[1][i*width + j], 1);
+			out.write((char*)&planes[2][i*width + j], 1);
+			
+			if (head->BitsPerPixel == 32)
+			{
+				char a = 0;
+				out.write(&a, 1);
+			}
 		}
-		if (head->BitsPerPixel)
+		if (head->BitsPerPixel != 32)
 		{
+			uint8_t garbage[3];
+			std::fill_n(garbage, 3, 0);
 			uint8_t tailLen = (width * head->BitsPerPixel) % 32;
-			for (size_t i = 0; i != tailLen; i++)
-				out << 0;
+			out.write((char*)garbage, tailLen);
 		}
+		
 	}
 }
 
