@@ -4,23 +4,7 @@
 using namespace std;
 
 
-RgbPixel BMPImage::getPixel(size_t x, size_t y)const
-{
-	RgbPixel result;
-	result.r = planes[0][y*width + x];
-	result.g = planes[1][y*width + x];
-	result.b = planes[2][y*width + x];
 
-	return result;
-}
-
-
-void BMPImage::setPixel(size_t x, size_t y, RgbPixel p)
-{
-	planes[0][y*width + x] = p.r;
-	planes[1][y*width + x] = p.g;
-	planes[2][y*width + x] = p.b;
-}
 
 
 
@@ -105,4 +89,11 @@ void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key
 			cover.setPixel(x, y, curPixel);
 		}
 	}
+}
+
+
+
+int main(int argc, char** argv)
+{
+	
 }

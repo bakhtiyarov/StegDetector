@@ -142,3 +142,11 @@ void findKey(const BMPImage& img)
 
 
 }
+
+
+
+
+int main(int argc, char** argv)
+{
+
+}

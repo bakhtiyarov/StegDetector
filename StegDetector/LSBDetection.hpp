@@ -9,28 +9,8 @@ see Ankit Gupta, Rahul Garg - "Detecting LSB Steganography in Images" for algori
 #include <cassert>
 #include <vector>
 #include <algorithm>
+#include "BMPImage.hpp"
 
-
-
-struct RgbPixel
-{
-	uint8_t r, g, b;
-};
-
-struct BMPImage
-{
-	size_t width, height;
-	std::string filename;
-	uint8_t* planes[3];//R,G,B;
-
-	size_t getSize()const
-	{
-		return width * height * 3;
-	}
-
-	RgbPixel getPixel(size_t x, size_t y)const;
-	void setPixel(size_t x, size_t y, RgbPixel p);
-};
 
 
 using KeyPair = std::pair < uint64_t, uint64_t > ;
