@@ -75,7 +75,10 @@ BMPImage::BMPImage(const char* filename)
 	{
 		head = new BMPHEAD;
 		in >> *head;
-		in.seekg(head->Ptr);
+		in.seekg(0);
+
+		arr = new uint8_t[head->FileLength];
+		in.read((char*)arr, head->FileLength);
 
 		if (head->BitsPerPixel != 24 && head->BitsPerPixel != 32)
 			throw UnsupportedImageFormatException("Image have unsupported bit depth");
@@ -86,25 +89,32 @@ BMPImage::BMPImage(const char* filename)
 		planes[1] = new uint8_t[width * height];
 		planes[2] = new uint8_t[width * height];
 
-		for (size_t i = 0; i != head->Height; i++)
+	
+		if (head->BitsPerPixel == 24)
 		{
-			for (size_t j = 0; j != head->Width; j++)
-			{
-				in.read((char*)&planes[0][i*width + j], 1);
-				in.read((char*)&planes[1][i*width + j], 1);
-				in.read((char*)&planes[2][i*width + j], 1);
 
-				if (head->BitsPerPixel == 32)
+			size_t rowlen = (head->Width * 3) % 4;
+			rowlen += head->Width * 3;
+
+			uint8_t* ptr = arr + head->Ptr;
+			for (size_t i = 0; i != height; i++)
+			{
+				for (size_t j = 0; j != width; j++)
 				{
-					uint8_t garbage;
-					in.read((char*)&garbage, 1);
+					planes[0][i*width + j] = ptr[ i*rowlen + j ];
+					planes[1][i*width + j] = ptr[i*rowlen + j + 1];
+					planes[2][i*width + j] = ptr[i*rowlen + j + 2];
 				}
 			}
-			if (head->BitsPerPixel != 32)
+		}
+		else if (head->BitsPerPixel == 32)
+		{
+			uint8_t* ptr = arr + head->Ptr;
+			for (size_t i = 0; i != width*height; i++)
 			{
-				uint8_t garbage[3];
-				uint8_t tailLen= (width * head->BitsPerPixel) % 32;
-				in.read((char*)garbage, tailLen);
+				planes[0][i] = ptr[4 * i];
+				planes[1][i] = ptr[4 * i + 1];
+				planes[2][i] = ptr[4 * i + 1];
 			}
 		}
 	}
@@ -119,7 +129,7 @@ BMPImage::BMPImage(const char* filename)
 
 void BMPImage::save(const char* fileName)
 {
-	ofstream out(fileName);
+	ofstream out(fileName, std::ofstream::out | std::ofstream::binary);
 	if (!out.is_open())
 	{
 		std::string err = "Failed to open file ";
@@ -128,40 +138,44 @@ void BMPImage::save(const char* fileName)
 		throw FileNameError(err.c_str());
 	}
 
-	head->Ptr = 55;
-	out << *head;
-	for (size_t i = 0; i != height; i++)
+	if (head->BitsPerPixel == 24)
 	{
-		for (size_t j = 0; j != width; j++)
+		size_t rowlen = (head->Width * 3) % 4;
+		rowlen += head->Width * 3;
+
+		uint8_t* ptr = arr + head->Ptr;
+		for (size_t i = 0; i != height; i++)
 		{
-			out.write((char*)&planes[0][i*width + j], 1);
-			out.write((char*)&planes[1][i*width + j], 1);
-			out.write((char*)&planes[2][i*width + j], 1);
-			
-			if (head->BitsPerPixel == 32)
+			for (size_t j = 0; j != width; j++)
 			{
-				char a = 0;
-				out.write(&a, 1);
+				ptr[i*rowlen + j] = planes[0][i*width + j];
+				ptr[i*rowlen + j + 1] = planes[1][i*width + j];
+				ptr[i*rowlen + j + 2] = planes[2][i*width + j];
 			}
 		}
-		if (head->BitsPerPixel != 32)
-		{
-			uint8_t garbage[3];
-			std::fill_n(garbage, 3, 0);
-			uint8_t tailLen = (width * head->BitsPerPixel) % 32;
-			out.write((char*)garbage, tailLen);
-		}
-		
 	}
+	else if (head->BitsPerPixel == 32)
+	{
+		uint8_t* ptr = arr + head->Ptr;
+		for (size_t i = 0; i != width*height; i++)
+		{
+			ptr[4 * i] = planes[0][i];
+			ptr[4 * i + 1] = planes[1][i];
+			ptr[4 * i + 1] = planes[2][i];
+		}
+	}
+
+	out.write((char*)arr, head->FileLength);
 }
 
 
 BMPImage::~BMPImage()
 {
 	delete head;
-	delete planes[0];
-	delete planes[1];
-	delete planes[2];
+	delete[] planes[0];
+	delete[] planes[1];
+	delete[] planes[2];
+	delete[] arr;
 }
 
 

@@ -51,4 +51,5 @@ struct BMPImage
 
 private:
 	BMPHEAD* head;
+	uint8_t* arr;
 };
