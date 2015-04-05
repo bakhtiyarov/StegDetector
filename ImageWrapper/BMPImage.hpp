@@ -41,6 +41,8 @@ struct BMPImage
 	explicit BMPImage(const char* filename);
 	virtual ~BMPImage();
 
+	void save(const char* fileName);
+
 private:
 	BMPHEAD* head;
 };

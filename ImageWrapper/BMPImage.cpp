@@ -33,6 +33,14 @@ std::istream& operator>>(std::istream& in, BMPHEAD& h)
 	return in;
 }
 
+std::ostream& operator<<(std::ostream& out, BMPHEAD& h)
+{
+	out << h.Signature << h.FileLength << h.Zero << h.Ptr << h.Version << h.Width << h.Height << h.Planes << h.BitsPerPixel <<
+		h.Compression << h.SizeImage << h.XPelsPerMeter << h.YPelsPerMeter << h.ClrUsed << h.ClrImportant;
+
+	return out;
+}
+
 
 RgbPixel BMPImage::getPixel(size_t x, size_t y)const
 {
@@ -62,6 +70,10 @@ BMPImage::BMPImage(const char* filename)
 		in >> *head;
 		in.seekg(head->Ptr);
 
+		//We don't need this
+		head->FileLength -= (head->Ptr - 54);
+		head->Ptr = 54;
+
 		if (head->Planes != 3)
 			throw UnsupportedImageFormatException("Image have unupported count of bit planes; may be this is grayscale image");
 		if (head->BitsPerPixel != 24 && head->BitsPerPixel != 32)
@@ -87,6 +99,13 @@ BMPImage::BMPImage(const char* filename)
 					in >> garbage;
 				}
 			}
+			if (head->BitsPerPixel != 32)
+			{
+				uint8_t garbage;
+				uint8_t tailLen= (width * head->BitsPerPixel) % 32;
+				for (size_t i = 0; i != tailLen; i++)
+					in >> garbage;
+			}
 		}
 	}
 	else
@@ -94,6 +113,36 @@ BMPImage::BMPImage(const char* filename)
 		std::string err = "Failed to open file ";
 		err.append(filename);
 		throw FileNameError(err.c_str());
+	}
+}
+
+
+void BMPImage::save(const char* fileName)
+{
+	ofstream out(fileName);
+	if (!out.is_open())
+	{
+		std::string err = "Failed to open file ";
+		err.append(fileName);
+		err.append(" for writing!");
+		throw FileNameError(err.c_str());
+	}
+
+	out << *head;
+	for (size_t i = 0; i != height; i++)
+	{
+		for (size_t j = 0; j != width; j++)
+		{
+			out << planes[0][i*width + j];
+			out << planes[1][i*width + j];
+			out << planes[2][i*width + j];
+		}
+		if (head->BitsPerPixel)
+		{
+			uint8_t tailLen = (width * head->BitsPerPixel) % 32;
+			for (size_t i = 0; i != tailLen; i++)
+				out << 0;
+		}
 	}
 }
 

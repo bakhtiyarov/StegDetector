@@ -1,5 +1,9 @@
 #include "LSB.hpp"
 #include <cassert>
+#include <boost/program_options.hpp>
+#include <iostream>
+
+namespace opts = boost::program_options;
 
 using namespace std;
 
@@ -95,5 +99,62 @@ void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key
 
 int main(int argc, char** argv)
 {
-	
+	std::string contName, secretName, outName;
+	KeyTuple key;
+
+
+	try
+	{
+		opts::options_description desc("Allowed options");
+		desc.add_options()
+			("help", "show this help message")
+			("secret,s", opts::value<string>(&secretName), "Image which will be hiden in the container")
+			("cont,c", opts::value<string>(&contName), "Image which will be used as container for hiding")
+			("left,x", opts::value<uint32_t>(&key.x)->default_value(0), "The low bound of hiding area by X axis")
+			("right,w", opts::value<uint32_t>(&key.w)->default_value(0), "The high bound of hiding area by X axis")
+			("top,y", opts::value<uint32_t>(&key.y)->default_value(0), "The low bound of hiding area by Y axis")
+			("bottom,h", opts::value<uint32_t>(&key.h)->default_value(0), "The high bound of hiding area by Y axis")
+			("LSB-bits,k", opts::value<uint32_t>(&key.k)->default_value(2), "Count of least significant bits used for message hiding")
+			("output,o", opts::value<string>(&outName), "File name for result");
+
+		opts::variables_map vm;
+		opts::store(opts::parse_command_line(argc, argv, desc), vm);
+		opts::notify(vm);
+
+		if (vm.count("help"))
+		{
+			std::cout << desc << std::endl;
+			return 0;
+		}
+		if (!vm.count("secret"))
+		{
+			cout << "You should pass name of secret image!" << std::endl << desc << std::endl;
+			return -1;
+		}
+		if (!vm.count("cont"))
+		{
+			cout << "You should pass name of container image!" << std::endl << desc << std::endl;
+			return -1;
+		}
+		if (!vm.count("output"))
+		{
+			cout << "You should pass name of output image!" << std::endl << desc << std::endl;
+			return -1;
+		}
+
+
+		BMPImage secret(secretName.c_str());
+		BMPImage cont(contName.c_str());
+
+		createLSBImage(cont, secret, key);
+	}
+	catch (std::exception& e)
+	{
+		std::cout << e.what() << std::endl;
+		return -1;
+	}
+
+
+
+	return 0;
 }
