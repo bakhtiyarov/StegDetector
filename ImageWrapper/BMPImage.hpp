@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <stdexcept>
 
 struct RgbPixel
 {
@@ -13,15 +14,20 @@ struct BMPHEAD;
 
 class UnsupportedImageFormatException : public std::exception
 {
+	std::string errStr;
 public:
 	UnsupportedImageFormatException(const std::string& str);
+	virtual const char* what();
 };
 
 
 class FileNameError : public std::exception
 {
+	std::string errStr;
 public:
-	FileNameError(const char* err) : std::exception(err){}
+	FileNameError(const char* err) : std::exception(), errStr(err){}
+	virtual const char* what()
+	{return errStr.c_str();}
 };
 
 struct BMPImage

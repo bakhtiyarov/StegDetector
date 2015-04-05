@@ -110,11 +110,11 @@ int main(int argc, char** argv)
 			("help", "show this help message")
 			("secret,s", opts::value<string>(&secretName), "Image which will be hiden in the container")
 			("cont,c", opts::value<string>(&contName), "Image which will be used as container for hiding")
-			("left,x", opts::value<uint32_t>(&key.x)->default_value(0), "The low bound of hiding area by X axis")
-			("right,w", opts::value<uint32_t>(&key.w)->default_value(0), "The high bound of hiding area by X axis")
-			("top,y", opts::value<uint32_t>(&key.y)->default_value(0), "The low bound of hiding area by Y axis")
-			("bottom,h", opts::value<uint32_t>(&key.h)->default_value(0), "The high bound of hiding area by Y axis")
-			("LSB-bits,k", opts::value<uint32_t>(&key.k)->default_value(2), "Count of least significant bits used for message hiding")
+			("left,x", opts::value<size_t>(&key.x)->default_value(0), "The low bound of hiding area by X axis")
+			("right,w", opts::value<size_t>(&key.w)->default_value(0), "The high bound of hiding area by X axis")
+			("top,y", opts::value<size_t>(&key.y)->default_value(0), "The low bound of hiding area by Y axis")
+			("bottom,h", opts::value<size_t>(&key.h)->default_value(0), "The high bound of hiding area by Y axis")
+			("LSB-bits,k", opts::value<size_t>(&key.k)->default_value(2), "Count of least significant bits used for message hiding")
 			("output,o", opts::value<string>(&outName), "File name for result");
 
 		opts::variables_map vm;

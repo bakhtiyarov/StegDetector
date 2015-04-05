@@ -157,5 +157,10 @@ BMPImage::~BMPImage()
 
 
 UnsupportedImageFormatException::UnsupportedImageFormatException(const std::string& str)
-	:exception(str.c_str())
+	:exception(), errStr(str)
 {}
+
+const char* UnsupportedImageFormatException::what()
+{
+	return errStr.c_str();
+}
