@@ -5,21 +5,21 @@
 using namespace std;
 namespace opts = boost::program_options;
 
-vector<bool> GetLeastBits(uint8_t c, size_t k)
+inline uint8_t GetLeastBits(uint8_t c, size_t k)
 {
-	std::vector<bool> result;
-	result.resize(k);
+	uint8_t result = 0;
+
 	for (uint8_t i = 0; i != k; i++)
-		result[i] = c & (1 << i);
+		result |= c & (1 << i);
 	return result;
 }
 
-vector<bool> GetMostBits(uint8_t c, size_t k)
+inline uint8_t GetMostBits(uint8_t c, size_t k)
 {
-	std::vector<bool> result;
-	result.resize(k);
+	uint8_t result = 0;
+
 	for (uint8_t i = 0; i != k; i++)
-		result[i] = c & (0x80 >> i);
+		result |= c & (0x80 >> i);
 	return result;
 }
 

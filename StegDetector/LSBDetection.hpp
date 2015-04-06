@@ -42,11 +42,11 @@ template<typename FwdIt> size_t sum(FwdIt First, FwdIt Last)
 
 
 
-std::vector<bool> GetLeastBits(uint8_t c, size_t k);
+uint8_t GetLeastBits(uint8_t c, size_t k);
 
 
 
-std::vector<bool> GetMostBits(uint8_t c, size_t k);
+uint8_t GetMostBits(uint8_t c, size_t k);
 
 
 
