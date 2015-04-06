@@ -1,6 +1,9 @@
 #include "LSBDetection.hpp"
+#include <boost/program_options.hpp>
+#include <iostream>
 
 using namespace std;
+namespace opts = boost::program_options;
 
 vector<bool> GetLeastBits(uint8_t c, size_t k)
 {
@@ -29,6 +32,7 @@ bool scoreFunction(uint8_t p, uint8_t top, uint8_t left, size_t k)
 		(GetMostBits(p,8-k) == GetMostBits(top,8-k));
 }
 
+//TODO: I need parallel version of this function
 bitMap calculateBitmap(const BMPImage& img, size_t k)
 {
 	bitMap result;
@@ -84,6 +88,7 @@ KeyPair evaluateXW(const std::vector<uint32_t>& Fx)
 void findKey(const BMPImage& img)
 {
 	std::vector<KeyTuple> keys;
+	std::vector<uint32_t> keyScores;
 	for (size_t k = 1; k != 5; k++)
 	{
 		bitMap S = calculateBitmap(img, k);
@@ -137,10 +142,18 @@ void findKey(const BMPImage& img)
 		curKey.k = k;
 
 		keys.push_back(curKey);
+		uint32_t scoreX = sum(Fx.cbegin() + curKey.x, Fx.cbegin() + curKey.w + 1);
+		uint32_t scoreY = sum(Fy.cbegin() + curKey.y, Fy.cbegin() + curKey.h + 1);
+
+		uint32_t score = std::pow(2, k) * (scoreX + scoreY);
+		keyScores.push_back(score);
 	}
 
 
-
+	for (size_t i = 0; i != keyScores.size(); i++)
+	{
+		std::cout << "k: " << keys[i].k << " and scores" << keyScores[i] << std::endl;
+	}
 }
 
 
@@ -148,5 +161,39 @@ void findKey(const BMPImage& img)
 
 int main(int argc, char** argv)
 {
+	std::string fName, outfName;
 
+	try
+	{
+		opts::options_description desc("Allowed options");
+		desc.add_options()
+			("help", "show this help message")
+			("input,i", opts::value<string>(&fName), "Image which will be checked")
+			("output,0", opts::value<string>(&outfName), "In this image we save result of work");
+
+		opts::variables_map vm;
+		opts::store(opts::parse_command_line(argc, argv, desc), vm);
+		opts::notify(vm);
+
+		if (vm.count("help"))
+		{
+			std::cout << desc << std::endl;
+			return 0;
+		}
+		if (!vm.count("input"))
+		{
+			std::cout << "You should pass name of file to check!" << std::endl << desc << std::endl;
+			return -1;
+		}
+
+		BMPImage img(fName.c_str());
+		findKey(img);
+	}
+	catch (std::exception& e)
+	{
+		std::cout << "Error: " << e.what() << std::endl;
+		return -2;
+	}
+
+	return 0;
 }
