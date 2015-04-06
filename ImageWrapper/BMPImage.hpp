@@ -10,7 +10,26 @@ struct RgbPixel
 	uint8_t r, g, b;
 };
 
-struct BMPHEAD;
+struct BMPHEAD
+{
+	uint16_t Signature;         // Must be 0x4d42 == ”BM”
+	uint32_t FileLength;
+	uint32_t Zero;
+	uint32_t Ptr;
+	uint32_t Version;			//Must be 0x28
+	uint32_t Width;
+	uint32_t Height;
+	uint16_t   Planes;
+	uint16_t   BitsPerPixel;
+	uint32_t Compression;
+	uint32_t SizeImage;
+	uint32_t XPelsPerMeter;
+	uint32_t YPelsPerMeter;
+	uint32_t ClrUsed;
+	uint32_t ClrImportant;
+
+	BMPHEAD();
+};
 
 class UnsupportedImageFormatException : public std::exception
 {
@@ -45,11 +64,11 @@ struct BMPImage
 	void setPixel(size_t x, size_t y, RgbPixel p);
 
 	explicit BMPImage(const char* filename);
+	BMPImage();
 	virtual ~BMPImage();
 
 	void save(const char* fileName);
 
-private:
 	BMPHEAD* head;
 	uint8_t* arr;
 };

@@ -3,27 +3,19 @@
 
 using namespace std;
 
-struct BMPHEAD
+
+BMPHEAD::BMPHEAD()
 {
-	uint16_t Signature;         // Must be 0x4d42 == ”BM”              //0
-	uint32_t FileLength;             // в байтах                                          //2
-	uint32_t Zero;                       // Must be 0                                          //6
-	uint32_t Ptr;                          // смещение к области данных         //10
-	uint32_t Version;// длина оставшейся части заголовка=0x28    //14
-	uint32_t Width;         // ширина изображения в пикселах             //18
-	uint32_t Height;        // высота изображения в пикселах                         //22
-	uint16_t   Planes;            // к-во битовых плоскостей             //26
-	uint16_t   BitsPerPixel;  // к-во бит на папиксел         //28
-	uint32_t Compression;          // сжатие: 0 или 1 или 2                    //30
-	uint32_t SizeImage;              // размер блока данных в байтах     //34
-	uint32_t XPelsPerMeter;      // в ширину: пикселов на метр         //38
-	uint32_t YPelsPerMeter;       // в высчоту: пикселов на метр       //42
-	uint32_t ClrUsed;                  // к-во цветов в палитре                  //46
-	uint32_t ClrImportant; // к-во используемых цветов в палитре //50
-
-	//uint8_t pal[256][4];
-};
-
+	Signature = 0x4d42;
+	Zero = 0;
+	Ptr = 54;
+	Version = 0x28;
+	Planes = 1;
+	BitsPerPixel = 24;
+	Compression = 0;
+	XPelsPerMeter = YPelsPerMeter = 0;//???
+	ClrUsed = ClrImportant = 0;
+}
 
 std::istream& operator>>(std::istream& in, BMPHEAD& h)
 {
@@ -67,6 +59,9 @@ void BMPImage::setPixel(size_t x, size_t y, RgbPixel p)
 }
 
 
+
+
+
 BMPImage::BMPImage(const char* filename)
 {
 	ifstream in;
@@ -101,9 +96,9 @@ BMPImage::BMPImage(const char* filename)
 			{
 				for (size_t j = 0; j != width; j++)
 				{
-					planes[0][i*width + j] = ptr[ i*rowlen + j ];
-					planes[1][i*width + j] = ptr[i*rowlen + j + 1];
-					planes[2][i*width + j] = ptr[i*rowlen + j + 2];
+					planes[0][i*width + j] = ptr[ i*rowlen + 3 * j ];
+					planes[1][i*width + j] = ptr[i*rowlen + 3 * j + 1];
+					planes[2][i*width + j] = ptr[i*rowlen + 3 * j + 2];
 				}
 			}
 		}
@@ -126,9 +121,35 @@ BMPImage::BMPImage(const char* filename)
 	}
 }
 
+BMPImage::BMPImage()
+	:width(0), height(0), head(nullptr), arr(nullptr)
+{
+	planes[0] = planes[1] = planes[2] = nullptr;
+}
+
 
 void BMPImage::save(const char* fileName)
 {
+	if (!head)
+	{
+		head = new BMPHEAD;
+		head->Height = height;
+		head->Width = width;
+		head->SizeImage = width*height * 3;
+		head->FileLength = head->SizeImage + 54;
+		arr = new uint8_t[head->FileLength];
+		uint8_t* ptr = arr;
+		memcpy(ptr, &head->Signature, sizeof(head->Signature));
+		ptr += sizeof(head->Signature);
+		memcpy(ptr, &head->FileLength, sizeof(head->FileLength) * 6);
+		ptr += sizeof(head->FileLength) * 6;
+		memcpy(ptr, &head->Planes, sizeof(head->Planes) * 2);
+		ptr += sizeof(head->Planes) * 2;
+		memcpy(ptr, &head->Compression, sizeof(head->Compression) * 6);
+	}
+
+
+
 	ofstream out(fileName, std::ofstream::out | std::ofstream::binary);
 	if (!out.is_open())
 	{
@@ -148,9 +169,9 @@ void BMPImage::save(const char* fileName)
 		{
 			for (size_t j = 0; j != width; j++)
 			{
-				ptr[i*rowlen + j] = planes[0][i*width + j];
-				ptr[i*rowlen + j + 1] = planes[1][i*width + j];
-				ptr[i*rowlen + j + 2] = planes[2][i*width + j];
+				ptr[i*rowlen + 3 * j] = planes[0][i*width + j];
+				ptr[i*rowlen + 3 * j + 1] = planes[1][i*width + j];
+				ptr[i*rowlen + 3 * j + 2] = planes[2][i*width + j];
 			}
 		}
 	}
