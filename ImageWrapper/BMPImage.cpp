@@ -138,16 +138,16 @@ void BMPImage::save(const char* fileName)
 		head->SizeImage = width*height * 3;
 		head->FileLength = head->SizeImage + 54;
 		arr = new uint8_t[head->FileLength];
-		uint8_t* ptr = arr;
-		memcpy(ptr, &head->Signature, sizeof(head->Signature));
-		ptr += sizeof(head->Signature);
-		memcpy(ptr, &head->FileLength, sizeof(head->FileLength) * 6);
-		ptr += sizeof(head->FileLength) * 6;
-		memcpy(ptr, &head->Planes, sizeof(head->Planes) * 2);
-		ptr += sizeof(head->Planes) * 2;
-		memcpy(ptr, &head->Compression, sizeof(head->Compression) * 6);
 	}
 
+	uint8_t* ptr = arr;
+	memcpy(ptr, &head->Signature, sizeof(head->Signature));
+	ptr += sizeof(head->Signature);
+	memcpy(ptr, &head->FileLength, sizeof(head->FileLength) * 6);
+	ptr += sizeof(head->FileLength) * 6;
+	memcpy(ptr, &head->Planes, sizeof(head->Planes) * 2);
+	ptr += sizeof(head->Planes) * 2;
+	memcpy(ptr, &head->Compression, sizeof(head->Compression) * 6);
 
 
 	ofstream out(fileName, std::ofstream::out | std::ofstream::binary);
@@ -164,7 +164,7 @@ void BMPImage::save(const char* fileName)
 		size_t rowlen = (head->Width * 3) % 4;
 		rowlen += head->Width * 3;
 
-		uint8_t* ptr = arr + head->Ptr;
+		ptr = arr + head->Ptr;
 		for (size_t i = 0; i != height; i++)
 		{
 			for (size_t j = 0; j != width; j++)
