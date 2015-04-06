@@ -37,12 +37,16 @@ bitMap calculateBitmap(const BMPImage& img, size_t k)
 {
 	bitMap result;
 	result.resize(img.width);
+
+
 	for (auto x = result.begin(); x != result.end(); x++)
 		x->resize(img.height);
 
-	for (size_t i = 1; i != img.width; i++)
+#pragma omp parallel for
+	for (int64_t i = 1; i < img.width; i++)
 	{
-		for (size_t j = 1; j != img.height; j++)
+#pragma omp parallel for
+		for (int64_t j = 1; j < img.height; j++)
 		{
 			RgbPixel pixel = img.getPixel(i, j);
 			RgbPixel left = img.getPixel(i - 1, j);
@@ -54,6 +58,7 @@ bitMap calculateBitmap(const BMPImage& img, size_t k)
 			result[i][j] = res;
 		}
 	}
+
 
 	return result;
 }
@@ -94,8 +99,8 @@ void findKey(const BMPImage& img)
 		bitMap S = calculateBitmap(img, k);
 
 		std::vector<uint32_t> Fx, Fy;
-		Fx.resize(img.height);
-		Fy.resize(img.width);
+		Fx.resize(img.width);
+		Fy.resize(img.height);
 		std::fill(Fx.begin(), Fx.end(), 0);
 		std::fill(Fy.begin(), Fy.end(), 0);
 
