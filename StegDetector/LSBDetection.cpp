@@ -5,6 +5,16 @@
 using namespace std;
 namespace opts = boost::program_options;
 
+
+std::ostream& operator<<(std::ostream& out, const KeyTuple& t)
+{
+	out << "(x,y) = (" << t.x << "," << t.y << ")" << std::endl <<
+		"(w,h) = (" << t.w << "," << t.h << ")" << std::endl <<
+		"k = " << t.k << std::endl;
+
+	return out;
+}
+
 inline uint8_t GetLeastBits(uint8_t c, size_t k)
 {
 	uint8_t result = 0;
@@ -99,7 +109,7 @@ void findKey(const BMPImage& img)
 {
 	std::vector<KeyTuple> keys;
 	std::vector<uint32_t> keyScores;
-	for (size_t k = 1; k != 5; k++)
+	for (size_t k = 1; k != 9; k++)
 	{
 		bitMap S = calculateBitmap(img, k);
 
@@ -133,12 +143,14 @@ void findKey(const BMPImage& img)
 
 		for (auto x = Fx.begin(); x != Fx.end(); x++)
 		{
-			x -= xmean;
+			if (*x >= xmean)
+				*x -= xmean;
 		}
 
 		for (auto y = Fy.begin(); y != Fy.end(); y++)
 		{
-			y -= ymean;
+			if (*y >= ymean)
+				*y -= ymean;
 		}
 
 
@@ -162,7 +174,7 @@ void findKey(const BMPImage& img)
 
 	for (size_t i = 0; i != keyScores.size(); i++)
 	{
-		std::cout << "k: " << keys[i].k << " and scores" << keyScores[i] << std::endl;
+		std::cout << keys[i] << "and scores " << keyScores[i] / (keys[i].w * keys[i].h) << std::endl;
 	}
 }
 
