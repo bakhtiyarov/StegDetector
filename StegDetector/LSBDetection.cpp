@@ -69,11 +69,16 @@ KeyPair evaluateXW(const std::vector<uint32_t>& Fx)
 	uint32_t curMax = 0;
 	size_t imax, jmax;
 
-	for (size_t i = 0; i != Fx.size(); i++)
+#pragma omp parallel for
+	for (int32_t i = 0; i < Fx.size()-1; i++)
 	{
-		for (size_t j = i + 1; j != Fx.size(); j++)
+#pragma omp parallel for
+		for (int32_t j = i + 1; j < Fx.size()-1; j++)
 		{
-			uint32_t res = sum(Fx.cbegin() + i, Fx.cbegin() + j + 1);
+			uint32_t res = 0;
+			res = sum(Fx.data() + i, Fx.data() + j + 1);
+			
+#pragma omp critical
 			if (res > curMax)
 			{
 				curMax = res;
