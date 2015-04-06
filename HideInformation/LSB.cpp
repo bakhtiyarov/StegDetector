@@ -24,9 +24,9 @@ double calculateFactor(size_t width1, size_t height1, size_t width2, size_t heig
 
 
 
-void setLSB(char& c, const vector<bool>& data)
+void setLSB(uint8_t& c, const vector<bool>& data)
 {
-	assert(data.size() < 8);
+	assert(data.size() <= 8);
 
 	uint8_t k = data.size();
 	
@@ -35,6 +35,26 @@ void setLSB(char& c, const vector<bool>& data)
 		c &= 0xFE << (k - i - 1);
 		c |= data[i] << (k - i - 1);
 	}
+}
+
+void setMSB(uint8_t& c, const vector<bool>& data)
+{
+	uint8_t k = data.size();
+	for (size_t i = 0; i != k; i++)
+	{
+		c &= 0x7F >> (k - i - 1);
+		c |= data[k - i] << (8 - k + i);
+	}
+}
+
+
+std::vector<bool> getLSB(char c, uint8_t k)
+{
+	std::vector<bool> result;
+	for (uint8_t i = 0; i != k; i++)
+		result.push_back(c &(1 << (k - i - 1)));
+
+	return result;
 }
 
 
@@ -72,10 +92,28 @@ vector<bool> getBits(uint8_t* data, uint64_t indexOfFirstBit, uint64_t count)
 
 
 
-void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key, LsbMode /* = LsbMode::Simple */)
+void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbMode /* = LsbMode::Simple */)
 {
 	uint64_t curSecretBit = 0;
 
+	//save dimensions of secret image into first bytes; TODO: may be should save all header of secret image?
+	{
+		uint32_t w = secret.width;
+		uint32_t h = secret.height;
+		uint8_t* wp = (uint8_t*)&w;
+		uint8_t* hp = (uint8_t*)&h;
+
+		secret.planes[0][0] = *wp++;
+		secret.planes[1][0] = *wp++;
+		secret.planes[2][0] = *wp++;
+		secret.planes[0][1] = *wp;
+		secret.planes[1][1] = *hp++;
+		secret.planes[2][1] = *hp++;
+		secret.planes[0][2] = *hp++;
+		secret.planes[1][2] = *hp;
+	}
+
+	//TODO: change curSecretBit to f(x,y) and make this loop parallel
 	for (size_t y = key.y; y != key.h; y++)
 	{
 		if (curSecretBit * 3 / 8 >= secret.getSize())
@@ -93,11 +131,126 @@ void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key
 
 			RgbPixel curPixel = cover.getPixel(x, y);
 
-			setLSB((char&)curPixel.r, next1);
-			setLSB((char&)curPixel.g, next2);
-			setLSB((char&)curPixel.b, next3);
+			setLSB(curPixel.r, next1);
+			setLSB(curPixel.g, next2);
+			setLSB(curPixel.b, next3);
 
 			cover.setPixel(x, y, curPixel);
+		}
+	}
+}
+
+
+//get next byte encoded in LSB of plane; @rw and @rpixNum contain states between calls of this function;
+static vector<bool> getNextByte(vector<bool> rw, size_t& rpixNum, uint8_t* plane, const KeyTuple& key)
+{
+	while (rw.size() < 8)
+	{
+		auto t = getLSB(plane[rpixNum], key.k);
+		rw.insert(rw.end(), t.cbegin(), t.cend());
+		rpixNum++;
+	}
+	vector<bool> nb(rw.cbegin(), rw.cbegin() + 8);
+	rw.erase(rw.cbegin(), rw.cbegin() + 8);
+	return nb;
+}
+
+
+//Extract dimensions of secret image from first LSB
+static std::pair<uint32_t,uint32_t> getDimensions(const BMPImage& src, const KeyTuple& key)
+{
+	uint32_t width, height;
+	uint8_t* p = (uint8_t*)&width;
+	uint8_t* ph = (uint8_t*)&height;
+	vector<bool> rw, gw, bw;
+	size_t rpixNum, gpixNum, bpixNum; 
+	rpixNum = gpixNum = bpixNum = 0;
+
+	auto nb = getNextByte(rw, rpixNum, src.planes[0], key);
+	setLSB(*p++, nb);
+	nb = getNextByte(gw, gpixNum, src.planes[1], key);
+	setLSB(*p++, nb);
+	nb = getNextByte(bw, bpixNum, src.planes[2], key);
+	setLSB(*p++, nb);
+	nb = getNextByte(rw, rpixNum, src.planes[0], key);
+	setLSB(*p++, nb);
+
+	nb = getNextByte(gw, gpixNum, src.planes[1], key);
+	setLSB(*ph++, nb);
+	nb = getNextByte(bw, bpixNum, src.planes[2], key);
+	setLSB(*ph++, nb);
+	nb = getNextByte(rw, rpixNum, src.planes[0], key);
+	setLSB(*ph++, nb);
+	nb = getNextByte(gw, gpixNum, src.planes[1], key);
+	setLSB(*ph++, nb);
+
+	return std::pair<uint32_t, uint32_t>(width, height);
+}
+
+
+void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key, LsbMode /* = LSBMode::Simple*/)
+{
+	uint64_t curSecretBit = 0;
+
+	uint32_t width, height;
+	auto sz = getDimensions(src, key);
+	width = sz.first;
+	height = sz.second;
+
+
+	result.planes[0] = new uint8_t[width * height];
+	result.planes[1] = new uint8_t[width * height];
+	result.planes[2] = new uint8_t[width * height];
+
+	result.width = width;
+	result.height = height;
+
+	if (!result.head)
+	{
+		result.head = new BMPHEAD;
+		result.head->FileLength = width*height * 3 + 54;
+		result.head->Ptr = 54;
+		result.head->SizeImage = width*height * 3;
+		result.head->Width = width;
+		result.head->Height = height;
+	}
+
+
+	if (!result.arr)
+		result.arr = new uint8_t[result.head->FileLength];
+	
+	uint8_t* ptr = result.arr + result.head->Ptr;
+
+	vector<bool> data[3];
+	data[0].reserve(width * height * 8);
+	data[1].reserve(width * height * 8);
+	data[2].reserve(width * height * 8);
+
+
+#pragma omp parallel for
+	for (int p = 0; p < 3; p++)
+	{
+		for (size_t i = 0; i < src.height; i++)
+		{
+			for (size_t j = 0; j < src.width; j++)	//TODO: process padding to 32-bit boundaries
+			{
+				auto d = getLSB(src.planes[p][i*src.width + j], key.k);
+				data[p].insert(data[p].end(), d.cbegin(), d.cend());
+			}
+		}
+	}
+
+#pragma omp parallel for
+	for (int p = 0; p < 3; p++)
+	{
+		for (size_t i = 0; i != height; i++)
+		{
+			for (size_t j = 0; j != width; j++)
+			{
+				size_t pixIndex = i*width + j;
+				vector<bool> nextByte(data[p].cbegin() + pixIndex * 8, data[p].cbegin() + (pixIndex + 1) * 8);
+				setLSB(result.planes[p][pixIndex], nextByte);
+			}
 		}
 	}
 }
@@ -106,7 +259,7 @@ void createLSBImage(BMPImage& cover, const BMPImage& secret, const KeyTuple& key
 
 int main(int argc, char** argv)
 {
-	std::string contName, secretName, outName;
+	std::string contName, secretName, outName, extractName;
 	KeyTuple key;
 
 
@@ -122,7 +275,8 @@ int main(int argc, char** argv)
 			("top,y", opts::value<size_t>(&key.y)->default_value(0), "The low bound of hiding area by Y axis")
 			("bottom,h", opts::value<size_t>(&key.h)->default_value(0), "The high bound of hiding area by Y axis")
 			("LSB-bits,k", opts::value<size_t>(&key.k)->default_value(2), "Count of least significant bits used for message hiding")
-			("output,o", opts::value<string>(&outName), "File name for result");
+			("output,o", opts::value<string>(&outName), "File name for result")
+			("extract,e", opts::value<string>(&extractName), "Filename to extract secret information using key");
 
 		opts::variables_map vm;
 		opts::store(opts::parse_command_line(argc, argv, desc), vm);
@@ -133,33 +287,56 @@ int main(int argc, char** argv)
 			std::cout << desc << std::endl;
 			return 0;
 		}
-		if (!vm.count("secret"))
+		if (vm.count("extract"))
 		{
-			cout << "You should pass name of secret image!" << std::endl << desc << std::endl;
-			return -1;
+			if (!vm.count("LSB-bits"))
+			{
+				std::cout << "Error: You should pass count of LSB bits!" << desc;
+				return -1;
+			}
+			if (!vm.count("output"))
+			{
+				std::cout << "Error: You should pass output file!" << desc;
+				return -1;
+			}
+
+			BMPImage src(extractName.c_str());
+			BMPImage res;
+
+			extractLSBImage(src, res, key);
+			res.save(outName.c_str());
+
 		}
-		if (!vm.count("cont"))
+		else//hide information mode
 		{
-			cout << "You should pass name of container image!" << std::endl << desc << std::endl;
-			return -1;
+			if (!vm.count("secret"))
+			{
+				cout << "You should pass name of secret image!" << std::endl << desc << std::endl;
+				return -1;
+			}
+			if (!vm.count("cont"))
+			{
+				cout << "You should pass name of container image!" << std::endl << desc << std::endl;
+				return -1;
+			}
+			if (!vm.count("output"))
+			{
+				cout << "You should pass name of output image!" << std::endl << desc << std::endl;
+				return -1;
+			}
+
+
+			BMPImage secret(secretName.c_str());
+			BMPImage cont(contName.c_str());
+
+			if (!key.h)
+				key.h = cont.height;
+			if (!key.w)
+				key.w = cont.width;
+
+			createLSBImage(cont, secret, key);
+			cont.save(outName.c_str());
 		}
-		if (!vm.count("output"))
-		{
-			cout << "You should pass name of output image!" << std::endl << desc << std::endl;
-			return -1;
-		}
-
-
-		BMPImage secret(secretName.c_str());
-		BMPImage cont(contName.c_str());
-
-		if (!key.h)
-			key.h = cont.height;
-		if (!key.w)
-			key.w = cont.width;
-
-		createLSBImage(cont, secret, key);
-		cont.save(outName.c_str());
 	}
 	catch (std::exception& e)
 	{
