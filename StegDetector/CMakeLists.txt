@@ -16,4 +16,4 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(IMAGEWRAPPER_PATH "../ImageWrapper")
 
-target_link_libraries(StegDetector ImageWrapper)
+target_link_libraries(StegDetector ImageWrapper ${Boost_LIBRARIES})

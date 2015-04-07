@@ -1,5 +1,6 @@
 #include "BMPImage.hpp"
 #include <fstream>
+#include <cstring>
 
 using namespace std;
 
