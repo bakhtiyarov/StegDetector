@@ -4,6 +4,8 @@ project(StegDetector)
 find_package(Boost REQUIRED program_options)
 include_directories(${Boost_INCLUDE_DIR} ../ImageWrapper)
 
+find_package(OpenMP REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 set(SOURCE_EXE LSBDetection.cpp)
 
