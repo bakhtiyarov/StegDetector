@@ -3,6 +3,7 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 #include <algorithm>
+#include <ctime>
 
 namespace opts = boost::program_options;
 
@@ -243,9 +244,11 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 #pragma omp parallel for
 	for (int p = 0; p < 3; p++)
 	{
-		for (size_t i = 0; i != height; i++)
+#pragma omp parallel for
+		for (int64_t i = 0; i < height; i++)
 		{
-			for (size_t j = 0; j != width; j++)
+#pragma omp parallel for
+			for (int64_t j = 0; j < width; j++)
 			{
 				size_t pixIndex = i*width + j;
 				vector<bool> nextByte(data[p].cbegin() + pixIndex * 8, data[p].cbegin() + (pixIndex + 1) * 8);
@@ -259,6 +262,7 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 
 int main(int argc, char** argv)
 {
+	time_t start_time = time(0);
 	std::string contName, secretName, outName, extractName;
 	KeyTuple key;
 
@@ -345,6 +349,10 @@ int main(int argc, char** argv)
 	}
 
 
+
+	time_t end_time = time(0);
+
+	std::cout << "Working time: " << end_time - start_time << std::endl;
 
 	return 0;
 }
