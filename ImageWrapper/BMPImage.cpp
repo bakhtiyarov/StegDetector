@@ -87,9 +87,9 @@ BMPImage::BMPImage(const char* filename)
 	
 		if (head->BitsPerPixel == 24)
 		{
-
-			size_t rowlen = (head->Width * 3) % 4;
-			rowlen += head->Width * 3;
+			size_t rowlen = head->Width * 3;
+			while (rowlen % 4)
+				rowlen++;
 
 			uint8_t* ptr = arr + head->Ptr;
 			for (size_t i = 0; i != height; i++)
@@ -111,6 +111,10 @@ BMPImage::BMPImage(const char* filename)
 				planes[1][i] = ptr[4 * i + 1];
 				planes[2][i] = ptr[4 * i + 1];
 			}
+		}
+		if (!head->SizeImage)
+		{
+			head->SizeImage = head->FileLength - head->Ptr;
 		}
 	}
 	else
@@ -139,6 +143,27 @@ void BMPImage::save(const char* fileName)
 		head->FileLength = head->SizeImage + 54;
 		arr = new uint8_t[head->FileLength];
 	}
+	size_t rowlen;
+	if (head->BitsPerPixel == 24)
+	{
+		rowlen = width*3;
+		while (rowlen % 4)
+			rowlen++;
+
+		if (rowlen != width*3)
+		{
+			delete arr;
+			arr = nullptr;
+			head->FileLength = height*rowlen + head->Ptr;
+			head->SizeImage = height*rowlen;
+		}
+	}
+	if (head->BitsPerPixel == 32)
+	{
+		rowlen = width*4;
+	}
+	if (!arr)
+		arr = new uint8_t[head->FileLength];
 
 	uint8_t* ptr = arr;
 	memcpy(ptr, &head->Signature, sizeof(head->Signature));
@@ -161,9 +186,6 @@ void BMPImage::save(const char* fileName)
 
 	if (head->BitsPerPixel == 24)
 	{
-		size_t rowlen = (head->Width * 3) % 4;
-		rowlen += head->Width * 3;
-
 		ptr = arr + head->Ptr;
 		for (size_t i = 0; i != height; i++)
 		{
