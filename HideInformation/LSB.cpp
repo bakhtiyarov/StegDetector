@@ -228,7 +228,7 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 	data[2].reserve(width * height * 8);
 
 
-#pragma omp parallel for
+//#pragma omp parallel for schedule(static,1)
 	for (int p = 0; p < 3; p++)
 	{
 		for (size_t i = 0; i < src.height; i++)
@@ -241,13 +241,13 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 		}
 	}
 
-#pragma omp parallel for
+//#pragma omp parallel for schedule(static,1)
 	for (int p = 0; p < 3; p++)
 	{
-#pragma omp parallel for
+//#pragma omp parallel for schedule(static,1)
 		for (int64_t i = 0; i < height; i++)
 		{
-#pragma omp parallel for
+//#pragma omp parallel for schedule(static,1)
 			for (int64_t j = 0; j < width; j++)
 			{
 				size_t pixIndex = i*width + j;
