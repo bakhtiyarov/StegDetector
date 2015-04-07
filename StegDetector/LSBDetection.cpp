@@ -191,7 +191,7 @@ int main(int argc, char** argv)
 		desc.add_options()
 			("help", "show this help message")
 			("input,i", opts::value<string>(&fName), "Image which will be checked")
-			("output,0", opts::value<string>(&outfName), "In this image we save result of work");
+			("output,o", opts::value<string>(&outfName), "In this image we save result of work");
 
 		opts::variables_map vm;
 		opts::store(opts::parse_command_line(argc, argv, desc), vm);

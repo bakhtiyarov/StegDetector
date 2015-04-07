@@ -16,12 +16,12 @@ using ImageSz = std::pair < uint32_t, uint32_t > ;
 
 
 
-ImageSz getNewSize( uint32_t ContWidth, uint32_t contHeight, uint8_t k, uint32_t secretWidth, 
+ImageSz getNewSize( uint32_t ContWidth, uint32_t contHeight, KeyTuple k, uint32_t secretWidth, 
 	uint32_t secretHeight)
 {
 	double factor = (double)secretWidth / secretHeight;
 
-	uint64_t maxPixelCount = ContWidth * contHeight * k / 8;
+	uint64_t maxPixelCount = ( k.w - k.x ) * (k.h - k.y) * k.k / 8;
 	if (maxPixelCount >= secretWidth * secretHeight)
 		return ImageSz(secretWidth, secretHeight);
 	
@@ -155,15 +155,14 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 	BMPImage* secretToSave = &secret;
 	BMPImage* smallImg = nullptr;
 
-	uint64_t maxSecretPixels = cover.width * cover.height * key.k / 8;
-	if (secret.width * secret.height > maxSecretPixels)
+	//uint64_t maxSecretPixels = cover.width * cover.height * key.k / 8;
+	auto newSz = getNewSize(cover.width, cover.height, key, secret.width, secret.height);
+	if ( secret.width != newSz.first || secret.height != newSz.second )
 	{
 		std::clog << "Size of secret image is greater then capacity of container, decreasing secret image" << std::endl;
-		ImageSz newSz = getNewSize(cover.width, cover.height, key.k, secret.width, secret.height);
 		std::clog << "New size of secret image is (" << newSz.first << ";" << newSz.second << ")" << std::endl;
 		
 		decreaseImage(secret, &smallImg, newSz);
-		smallImg->save("temp.bmp");
 		secretToSave = smallImg;
 	}
 
@@ -217,13 +216,20 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 
 
 //get next byte encoded in LSB of plane; @rw and @rpixNum contain states between calls of this function;
-static vector<bool> getNextByte(vector<bool> rw, size_t& rpixNum, uint8_t* plane, const KeyTuple& key)
+static vector<bool> getNextByte(vector<bool> rw, size_t& rx, size_t& ry, uint8_t* plane, const KeyTuple& key, size_t rowLength)
 {
+	size_t row = key.w - key.x;
 	while (rw.size() < 8)
 	{
-		auto t = getLSB(plane[rpixNum], key.k);
+		auto t = getLSB(plane[ry * rowLength + rx], key.k);
 		rw.insert(rw.end(), t.cbegin(), t.cend());
-		rpixNum++;
+		if (rx == row - 1)
+		{
+			ry++;
+			rx = 0;
+		}
+		else
+			rx++;
 	}
 	vector<bool> nb(rw.cbegin(), rw.cbegin() + 8);
 	rw.erase(rw.cbegin(), rw.cbegin() + 8);
@@ -238,25 +244,27 @@ static std::pair<uint32_t,uint32_t> getDimensions(const BMPImage& src, const Key
 	uint8_t* p = (uint8_t*)&width;
 	uint8_t* ph = (uint8_t*)&height;
 	vector<bool> rw, gw, bw;
-	size_t rpixNum, gpixNum, bpixNum; 
-	rpixNum = gpixNum = bpixNum = 0;
+	size_t rX, gX, bX, rY, gY, bY; 
+	rX = gX = bX = key.x;
+	rY = gY = bY = key.y;
 
-	auto nb = getNextByte(rw, rpixNum, src.planes[0], key);
+
+	auto nb = getNextByte(rw, rX, rY, src.planes[0], key, src.width);
 	setLSB(*p++, nb);
-	nb = getNextByte(gw, gpixNum, src.planes[1], key);
+	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*p++, nb);
-	nb = getNextByte(bw, bpixNum, src.planes[2], key);
+	nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
 	setLSB(*p++, nb);
-	nb = getNextByte(rw, rpixNum, src.planes[0], key);
+	nb = getNextByte(rw, rX, rY, src.planes[0], key, src.width);
 	setLSB(*p++, nb);
 
-	nb = getNextByte(gw, gpixNum, src.planes[1], key);
+	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*ph++, nb);
-	nb = getNextByte(bw, bpixNum, src.planes[2], key);
+	nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
 	setLSB(*ph++, nb);
-	nb = getNextByte(rw, rpixNum, src.planes[0], key);
+	nb = getNextByte(rw, rX, rY, src.planes[0], key, src.width);
 	setLSB(*ph++, nb);
-	nb = getNextByte(gw, gpixNum, src.planes[1], key);
+	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*ph++, nb);
 
 	return std::pair<uint32_t, uint32_t>(width, height);
@@ -301,15 +309,14 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 	data[1].reserve(width * height * 8);
 	data[2].reserve(width * height * 8);
 
-
 //#pragma omp parallel for schedule(static,1)
 	for (int p = 0; p < 3; p++)
 	{
-		for (size_t i = 0; i < src.height; i++)
+		for (size_t y = key.y; y < key.h; y++)
 		{
-			for (size_t j = 0; j < src.width; j++)	//TODO: process padding to 32-bit boundaries
+			for (size_t x = key.x; x < key.w; x++)	//TODO: process padding to 32-bit boundaries
 			{
-				auto d = getLSB(src.planes[p][i*src.width + j], key.k);
+				auto d = getLSB(src.planes[p][y*src.width + x], key.k);
 				data[p].insert(data[p].end(), d.cbegin(), d.cend());
 			}
 		}
@@ -381,6 +388,10 @@ int main(int argc, char** argv)
 			BMPImage src(extractName.c_str());
 			BMPImage res;
 
+			if (!key.h)
+				key.h = src.height;
+			if (!key.w)
+				key.w = src.width;
 			extractLSBImage(src, res, key);
 			res.save(outName.c_str());
 
