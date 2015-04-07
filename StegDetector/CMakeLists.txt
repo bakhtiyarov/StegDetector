@@ -12,7 +12,9 @@ set(SOURCE_EXE LSBDetection.cpp)
 link_directories(${IMAGEWRAPPER_PATH} ${Boost_LIBRARY_DIRS})
 add_executable(StegDetector ${SOURCE_EXE})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -std=c++11")
+endif()
 
 set(IMAGEWRAPPER_PATH "../ImageWrapper")
 
