@@ -110,7 +110,7 @@ std::vector<bool> getLSB(char c, uint8_t k)
 {
 	std::vector<bool> result;
 	for (uint8_t i = 0; i != k; i++)
-		result.push_back(c &(1 << (k - i - 1)));
+		result.push_back( (c &(1 << (k - i - 1))) != 0);
 
 	return result;
 }
@@ -134,7 +134,7 @@ vector<bool> getBits(uint8_t* data, uint64_t indexOfFirstBit, uint64_t count)
 	if (indexOfFirstBit + count > 8)
 	{
 		for (int i = indexOfFirstBit; i != 8; i++)
-			result.push_back(data[0] & (0x80 >> i));
+			result.push_back( (data[0] & (0x80 >> i)) != 0);
 
 		const vector<bool> tail = getBits(data + 1, 0, count - 8 + indexOfFirstBit);
 		std::copy(tail.cbegin(), tail.cend(), std::back_inserter(result));
@@ -142,7 +142,7 @@ vector<bool> getBits(uint8_t* data, uint64_t indexOfFirstBit, uint64_t count)
 	else
 	{
 		for (int i = indexOfFirstBit; i != std::min<size_t>(8, count + indexOfFirstBit); i++)
-			result.push_back(data[0] & (0x80 >> i));
+			result.push_back( (data[0] & (0x80 >> i)) != 0);
 	}
 	
 	return result;
