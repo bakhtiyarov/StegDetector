@@ -1,4 +1,5 @@
 #include "LSB.hpp"
+#include "ImageDiff.hpp"
 #include <cassert>
 #include <boost/program_options.hpp>
 #include <iostream>
@@ -10,18 +11,74 @@ namespace opts = boost::program_options;
 using namespace std;
 
 
+using ImageSz = std::pair < uint32_t, uint32_t > ;
 
 
 
 
-
-double calculateFactor(size_t width1, size_t height1, size_t width2, size_t height2, uint8_t k)
+ImageSz getNewSize( uint32_t ContWidth, uint32_t contHeight, uint8_t k, uint32_t secretWidth, 
+	uint32_t secretHeight)
 {
-	size_t available_sz = width1*height1*k;
-	size_t need_sz = width2*height2 * 8;
-	return need_sz / available_sz;
+	double factor = (double)secretWidth / secretHeight;
+
+	uint64_t maxPixelCount = ContWidth * contHeight * k / 8;
+	if (maxPixelCount >= secretWidth * secretHeight)
+		return ImageSz(secretWidth, secretHeight);
+	
+
+
+	double h_squared = (double)maxPixelCount / factor;
+	uint32_t h = (uint32_t)std::sqrt(h_squared);
+	uint32_t w = h * factor;
+
+	return ImageSz(w, h);
 }
 
+
+void decreaseImage(const BMPImage& src, BMPImage** dst, ImageSz toSize)
+{
+#ifdef DEBUG
+	time_t begin = time(0);
+#endif
+
+	*dst = new BMPImage();
+
+	BMPImage* img = *dst;
+	uint32_t w, h;
+	w = toSize.first;
+	h = toSize.second;
+	img->head = new BMPHEAD;
+
+	img->width = img->head->Width = w;
+	img->height = img->head->Height = h;
+	img->head->SizeImage = w*h*3;
+	img->head->FileLength = img->head->SizeImage + 54;
+
+	img->planes[0] = new uint8_t[w*h];
+	img->planes[1] = new uint8_t[w*h];
+	img->planes[2] = new uint8_t[w*h];
+
+	//double factor = (double)src.head->SizeImage / img->head->SizeImage;
+	double xfactor = (double)src.width / w;
+	double yfactor = (double)src.height / h;
+	
+	for (uint32_t i = 0; i != h; i++)
+	{
+		uint32_t ii = i*yfactor;
+		for (uint32_t j = 0; j != w; j++)
+		{
+			uint32_t jj = j*xfactor;
+			img->planes[0][i*w + j] = src.planes[0][ii*src.width + jj];
+			img->planes[1][i*w + j] = src.planes[1][ii*src.width + jj];
+			img->planes[2][i*w + j] = src.planes[2][ii*src.width + jj];
+		}
+	}
+#ifdef DEBUG
+	time_t end = time(0);
+	std::clog << "time of decreasing image = " << end - begin << std::endl;
+#endif // DEBUG
+
+}
 
 
 
@@ -95,39 +152,54 @@ vector<bool> getBits(uint8_t* data, uint64_t indexOfFirstBit, uint64_t count)
 
 void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbMode /* = LsbMode::Simple */)
 {
+	BMPImage* secretToSave = &secret;
+	BMPImage* smallImg = nullptr;
+
+	uint64_t maxSecretPixels = cover.width * cover.height * key.k / 8;
+	if (secret.width * secret.height > maxSecretPixels)
+	{
+		std::clog << "Size of secret image is greater then capacity of container, decreasing secret image" << std::endl;
+		ImageSz newSz = getNewSize(cover.width, cover.height, key.k, secret.width, secret.height);
+		std::clog << "New size of secret image is (" << newSz.first << ";" << newSz.second << ")" << std::endl;
+		
+		decreaseImage(secret, &smallImg, newSz);
+		smallImg->save("temp.bmp");
+		secretToSave = smallImg;
+	}
+
 	uint64_t curSecretBit = 0;
 
 	//save dimensions of secret image into first bytes; TODO: may be should save all header of secret image?
 	{
-		uint32_t w = secret.width;
-		uint32_t h = secret.height;
+		uint32_t w = secretToSave->width;
+		uint32_t h = secretToSave->height;
 		uint8_t* wp = (uint8_t*)&w;
 		uint8_t* hp = (uint8_t*)&h;
 
-		secret.planes[0][0] = *wp++;
-		secret.planes[1][0] = *wp++;
-		secret.planes[2][0] = *wp++;
-		secret.planes[0][1] = *wp;
-		secret.planes[1][1] = *hp++;
-		secret.planes[2][1] = *hp++;
-		secret.planes[0][2] = *hp++;
-		secret.planes[1][2] = *hp;
+		secretToSave->planes[0][0] = *wp++;
+		secretToSave->planes[1][0] = *wp++;
+		secretToSave->planes[2][0] = *wp++;
+		secretToSave->planes[0][1] = *wp;
+		secretToSave->planes[1][1] = *hp++;
+		secretToSave->planes[2][1] = *hp++;
+		secretToSave->planes[0][2] = *hp++;
+		secretToSave->planes[1][2] = *hp;
 	}
 
 	//TODO: change curSecretBit to f(x,y) and make this loop parallel
 	for (size_t y = key.y; y != key.h; y++)
 	{
-		if (curSecretBit * 3 / 8 >= secret.getSize())
+		if (curSecretBit * 3 / 8 >= secretToSave->getSize())
 			break;
 		for (size_t x = key.x; x != key.w; x++)
 		{
-			if (curSecretBit * 3 / 8 >= secret.getSize())
+			if (curSecretBit * 3 / 8 >= secretToSave->getSize())
 				break;
 
 			vector<bool> next1, next2, next3;
-			next1 = getBits(secret.planes[0], curSecretBit, key.k);
-			next2 = getBits(secret.planes[1], curSecretBit, key.k);
-			next3 = getBits(secret.planes[2], curSecretBit, key.k);
+			next1 = getBits(secretToSave->planes[0], curSecretBit, key.k);
+			next2 = getBits(secretToSave->planes[1], curSecretBit, key.k);
+			next3 = getBits(secretToSave->planes[2], curSecretBit, key.k);
 			curSecretBit += key.k;
 
 			RgbPixel curPixel = cover.getPixel(x, y);
@@ -139,6 +211,8 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 			cover.setPixel(x, y, curPixel);
 		}
 	}
+	if (smallImg)
+		delete smallImg;
 }
 
 
@@ -340,6 +414,11 @@ int main(int argc, char** argv)
 
 			createLSBImage(cont, secret, key);
 			cont.save(outName.c_str());
+
+			BMPImage result(outName.c_str());
+			BMPImage origCont(contName.c_str());
+			std::cout << "Difference between original container and contained with secret = "
+				<< BMPdiff(origCont.planes, cont.width, cont.height, result.planes) << "; Good difference should be <= 3" << std::endl;
 		}
 	}
 	catch (std::exception& e)
