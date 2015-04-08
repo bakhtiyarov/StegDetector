@@ -333,7 +333,10 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 			for (size_t x = key.x; x < key.w; x++)	//TODO: process padding to 32-bit boundaries
 			{
 				if (y == 0 && (x < 3))
+				{
+					data[p].insert(data[p].end(), 8, 0);
 					continue;
+				}
 				auto d = getLSB(src.planes[p][y*src.width + x], key.k);
 				data[p].insert(data[p].end(), d.cbegin(), d.cend());
 				data[p].insert(data[p].end(), 8 - key.k, 0);
