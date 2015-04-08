@@ -38,34 +38,60 @@ bool scoreFunction(uint8_t p, uint8_t top, uint8_t left, size_t k)
 {
 	return (GetLeastBits(p,k) == GetLeastBits(left,k)) &
 		(GetLeastBits(p,k) == GetLeastBits(top,k)) &
-		(GetMostBits(p,8-k) == GetMostBits(left,8-k)) &
-		(GetMostBits(p,8-k) == GetMostBits(top,8-k));
+		(GetMostBits(p,8-k) != GetMostBits(left,8-k)) &
+		(GetMostBits(p,8-k) != GetMostBits(top,8-k));
+}
+
+bool scoreFunction(uint8_t p, uint8_t neighbor, uint8_t k)
+{
+	return (GetLeastBits(p, k) == GetLeastBits(neighbor, k)) &
+		(GetMostBits(p, 8 - k) != GetMostBits(neighbor, 8 - k));
 }
 
 //TODO: I need parallel version of this function
 bitMap calculateBitmap(const BMPImage& img, size_t k)
 {
 	bitMap result;
-	result.resize(img.width);
+	result.resize(img.height);
 
 
 	for (auto x = result.begin(); x != result.end(); x++)
-		x->resize(img.height);
+		x->resize(img.width);
 
-#pragma omp parallel for
-	for (int64_t i = 1; i < img.width; i++)
+////#pragma omp parallel for
+//	for (int64_t i = 1; i < img.width; i++)
+//	{
+////#pragma omp parallel for
+//		for (int64_t j = 1; j < img.height; j++)
+//		{
+//			RgbPixel pixel = img.getPixel(i, j);
+//			RgbPixel left = img.getPixel(i - 1, j);
+//			RgbPixel top = img.getPixel(i, j - 1);
+//
+//			bool res = scoreFunction(pixel.r, top.r, left.r, k) &
+//				scoreFunction(pixel.g, top.g, left.g, k) &
+//				scoreFunction(pixel.b, top.b, left.b, k);
+//			result[i][j] = res;
+//		}
+//	}
+
+	uint8_t shift = 8 / k;
+	assert(8 % k == 0);
+
+	for (int64_t y = 0; y < img.height-1; y++)
 	{
-#pragma omp parallel for
-		for (int64_t j = 1; j < img.height; j++)
+		for (int64_t x = 0; x < img.width-1; x++)
 		{
-			RgbPixel pixel = img.getPixel(i, j);
-			RgbPixel left = img.getPixel(i - 1, j);
-			RgbPixel top = img.getPixel(i, j - 1);
+			RgbPixel pix = img.getPixel(x, y);
+			RgbPixel rightNeighbor;
+			
+			rightNeighbor = img.getPixel((x + shift) % img.width, y + (x+shift >= img.width)? 1 : 0);
 
-			bool res = scoreFunction(pixel.r, top.r, left.r, k) &
-				scoreFunction(pixel.g, top.g, left.g, k) &
-				scoreFunction(pixel.b, top.b, left.b, k);
-			result[i][j] = res;
+			bool res = scoreFunction(pix.r, rightNeighbor.r, k) &
+				scoreFunction(pix.g, rightNeighbor.g, k) &
+				scoreFunction(pix.b, rightNeighbor.b, k);
+
+			result[y][x] = res;
 		}
 	}
 
@@ -74,21 +100,22 @@ bitMap calculateBitmap(const BMPImage& img, size_t k)
 }
 
 
-KeyPair evaluateXW(const std::vector<uint32_t>& Fx)
+KeyPair evaluateXW(const std::vector<int32_t>& Fx)
 {
-	uint32_t curMax = 0;
+	int64_t curMax = 0;
 	size_t imax, jmax;
+	imax = jmax = 0;
 
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (int32_t i = 0; i < Fx.size()-1; i++)
 	{
-#pragma omp parallel for
+//#pragma omp parallel for
 		for (int32_t j = i + 1; j < Fx.size()-1; j++)
 		{
-			uint32_t res = 0;
+			int64_t res = 0;
 			res = sum(Fx.data() + i, Fx.data() + j + 1);
 			
-#pragma omp critical
+//#pragma omp critical
 			if (res > curMax)
 			{
 				curMax = res;
@@ -109,28 +136,31 @@ void findKey(const BMPImage& img)
 {
 	std::vector<KeyTuple> keys;
 	std::vector<uint32_t> keyScores;
-	for (size_t k = 1; k != 9; k++)
+	for (size_t k = 1; k != 2; k++)
 	{
+		if (8 % k)
+			continue;
 		bitMap S = calculateBitmap(img, k);
 
-		std::vector<uint32_t> Fx, Fy;
+		std::vector<int32_t> Fx, Fy;
 		Fx.resize(img.width);
 		Fy.resize(img.height);
 		std::fill(Fx.begin(), Fx.end(), 0);
 		std::fill(Fy.begin(), Fy.end(), 0);
 
-		for (size_t i = 0; i != img.width; i++)
+		for (size_t y = 0; y != img.height; y++)
 		{
-			for (size_t j = 0; j != img.height; j++)
+			for (size_t x = 0; x != img.width; x++)
 			{
-				Fx[i] += S[i][j];
-				Fy[j] += S[i][j];
+				Fx[x] += S[y][x];
+				Fy[y] += S[y][x];
 			}
 		}
 
 
-		uint32_t xmean, ymean;
-		xmean = ymean = 0;
+		double xmean, ymean;
+		double xdeviation, ydeviation;
+		xmean = ymean = xdeviation = ydeviation = 0;
 
 		for (size_t i = 0; i != Fx.size(); i++)
 			xmean += Fx[i];
@@ -140,21 +170,32 @@ void findKey(const BMPImage& img)
 			ymean += Fy[i];
 		ymean /= Fy.size();
 
+		for (size_t i = 0; i != Fx.size(); i++)
+			xdeviation += std::pow(Fx[i] - xmean, 2);
+		xdeviation /= Fx.size();
+		xdeviation = sqrt(xdeviation);
 
-		for (auto x = Fx.begin(); x != Fx.end(); x++)
+		for (size_t i = 0; i != Fy.size(); i++)
+			ydeviation += std::pow(Fy[i] - ymean, 2);
+		ydeviation /= Fy.size();
+		ydeviation = sqrt(ydeviation);
+
+		std::cout << "k = " << k << " and Fx's mean = " << xmean << " and deviation = " << xdeviation << std::endl;
+		std::cout << "And Fy's mean = " << ymean << " and deviation = " << ydeviation << std::endl;
+
+
+	/*	for (auto x = Fx.begin(); x != Fx.end(); x++)
 		{
-			if (*x >= xmean)
 				*x -= xmean;
 		}
 
 		for (auto y = Fy.begin(); y != Fy.end(); y++)
 		{
-			if (*y >= ymean)
 				*y -= ymean;
-		}
+		}*/
 
 
-		KeyPair xw = evaluateXW(Fx);
+	/*	KeyPair xw = evaluateXW(Fx);
 		KeyPair yh = evaluateXW(Fy);
 		KeyTuple curKey;
 		curKey.x = xw.first;
@@ -168,13 +209,14 @@ void findKey(const BMPImage& img)
 		uint32_t scoreY = sum(Fy.cbegin() + curKey.y, Fy.cbegin() + curKey.h + 1);
 
 		uint32_t score = std::pow(2, k) * (scoreX + scoreY);
-		keyScores.push_back(score);
+		keyScores.push_back(score);*/
 	}
 
 
 	for (size_t i = 0; i != keyScores.size(); i++)
 	{
-		std::cout << keys[i] << "and scores " << keyScores[i] / (keys[i].w * keys[i].h) << std::endl;
+		if (keys[i].w && keys[i].h)
+			std::cout << keys[i] << "and scores " << keyScores[i] / (keys[i].w * keys[i].h) << std::endl;
 	}
 }
 

@@ -21,7 +21,7 @@ ImageSz getNewSize( uint32_t ContWidth, uint32_t contHeight, KeyTuple k, uint32_
 {
 	double factor = (double)secretWidth / secretHeight;
 
-	uint64_t maxPixelCount = ( k.w - k.x ) * (k.h - k.y) * k.k / 8;
+	uint64_t maxPixelCount = (k.w - k.x) * (k.h - k.y);// *k.k / 8;
 	if (maxPixelCount >= secretWidth * secretHeight)
 		return ImageSz(secretWidth, secretHeight);
 	
@@ -183,6 +183,7 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 		secretToSave->planes[2][1] = *hp++;
 		secretToSave->planes[0][2] = *hp++;
 		secretToSave->planes[1][2] = *hp;
+		secretToSave->planes[2][2] = 0;
 	}
 
 	//TODO: change curSecretBit to f(x,y) and make this loop parallel
@@ -196,12 +197,27 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 				break;
 
 			vector<bool> next1, next2, next3;
-			next1 = getBits(secretToSave->planes[0], curSecretBit, key.k);
-			next2 = getBits(secretToSave->planes[1], curSecretBit, key.k);
-			next3 = getBits(secretToSave->planes[2], curSecretBit, key.k);
-			curSecretBit += key.k;
+			if (curSecretBit < 24)
+			{
+				next1 = getBits(secretToSave->planes[0], curSecretBit, key.k);
+				next2 = getBits(secretToSave->planes[1], curSecretBit, key.k);
+				next3 = getBits(secretToSave->planes[2], curSecretBit, key.k);
+				curSecretBit += key.k;
+			}
+			else
+			{
+				next1, next2, next3;
+				next1 = getBits(secretToSave->planes[0], curSecretBit, 8);
+				next2 = getBits(secretToSave->planes[1], curSecretBit, 8);
+				next3 = getBits(secretToSave->planes[2], curSecretBit, 8);
+				curSecretBit += 8;
+				next1.erase(next1.begin() + key.k, next1.end());
+				next2.erase(next2.begin() + key.k, next2.end());
+				next3.erase(next3.begin() + key.k, next3.end());
+			}
 
 			RgbPixel curPixel = cover.getPixel(x, y);
+			
 
 			setLSB(curPixel.r, next1);
 			setLSB(curPixel.g, next2);
@@ -216,7 +232,7 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 
 
 //get next byte encoded in LSB of plane; @rw and @rpixNum contain states between calls of this function;
-static vector<bool> getNextByte(vector<bool> rw, size_t& rx, size_t& ry, uint8_t* plane, const KeyTuple& key, size_t rowLength)
+static vector<bool> getNextByte(vector<bool>& rw, size_t& rx, size_t& ry, uint8_t* plane, const KeyTuple& key, size_t rowLength)
 {
 	size_t row = key.w - key.x;
 	while (rw.size() < 8)
@@ -316,8 +332,11 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 		{
 			for (size_t x = key.x; x < key.w; x++)	//TODO: process padding to 32-bit boundaries
 			{
+				if (y == 0 && (x < 3))
+					continue;
 				auto d = getLSB(src.planes[p][y*src.width + x], key.k);
 				data[p].insert(data[p].end(), d.cbegin(), d.cend());
+				data[p].insert(data[p].end(), 8 - key.k, 0);
 			}
 		}
 	}

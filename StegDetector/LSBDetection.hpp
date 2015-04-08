@@ -29,9 +29,9 @@ enum class LsbMode
 
 
 
-template<typename FwdIt> size_t sum(FwdIt First, FwdIt Last)
+template<typename FwdIt> int64_t sum(FwdIt First, FwdIt Last)
 {
-	size_t result = 0;
+	int64_t result = 0;
 	while (First != Last)
 	{
 		result += *First;
