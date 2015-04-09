@@ -1,6 +1,7 @@
 #include "LSBDetection.hpp"
 #include <boost/program_options.hpp>
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 namespace opts = boost::program_options;
@@ -36,16 +37,10 @@ inline uint8_t GetMostBits(uint8_t c, size_t k)
 
 bool scoreFunction(uint8_t p, uint8_t top, uint8_t left, size_t k)
 {
-	return (GetLeastBits(p,k) == GetLeastBits(left,k)) &
-		(GetLeastBits(p,k) == GetLeastBits(top,k)) &
-		(GetMostBits(p,8-k) != GetMostBits(left,8-k)) &
-		(GetMostBits(p,8-k) != GetMostBits(top,8-k));
-}
-
-bool scoreFunction(uint8_t p, uint8_t neighbor, uint8_t k)
-{
-	return (GetLeastBits(p, k) == GetLeastBits(neighbor, k)) &
-		(GetMostBits(p, 8 - k) != GetMostBits(neighbor, 8 - k));
+	return (GetLeastBits(p, k) == GetLeastBits(left, k)) &&
+		//(GetLeastBits(p,k) == GetLeastBits(top,k)) &&
+		(GetMostBits(p, 8 - k) != GetMostBits(left, 8 - k));// &&
+//		(GetMostBits(p,8-k) != GetMostBits(top,8-k));
 }
 
 //TODO: I need parallel version of this function
@@ -58,40 +53,20 @@ bitMap calculateBitmap(const BMPImage& img, size_t k)
 	for (auto x = result.begin(); x != result.end(); x++)
 		x->resize(img.width);
 
-////#pragma omp parallel for
-//	for (int64_t i = 1; i < img.width; i++)
-//	{
-////#pragma omp parallel for
-//		for (int64_t j = 1; j < img.height; j++)
-//		{
-//			RgbPixel pixel = img.getPixel(i, j);
-//			RgbPixel left = img.getPixel(i - 1, j);
-//			RgbPixel top = img.getPixel(i, j - 1);
-//
-//			bool res = scoreFunction(pixel.r, top.r, left.r, k) &
-//				scoreFunction(pixel.g, top.g, left.g, k) &
-//				scoreFunction(pixel.b, top.b, left.b, k);
-//			result[i][j] = res;
-//		}
-//	}
-
-	uint8_t shift = 8 / k;
-	assert(8 % k == 0);
-
-	for (int64_t y = 0; y < img.height-1; y++)
+#pragma omp parallel for
+	for (int64_t i = 1; i < img.height; i++)
 	{
-		for (int64_t x = 0; x < img.width-1; x++)
+#pragma omp parallel for
+		for (int64_t j = 1; j < img.width; j++)
 		{
-			RgbPixel pix = img.getPixel(x, y);
-			RgbPixel rightNeighbor;
-			
-			rightNeighbor = img.getPixel((x + shift) % img.width, y + (x+shift >= img.width)? 1 : 0);
+			RgbPixel pixel = img.getPixel(j, i);
+			RgbPixel left = img.getPixel(j - 1, i);
+			RgbPixel top = img.getPixel(j, i - 1);
 
-			bool res = scoreFunction(pix.r, rightNeighbor.r, k) &
-				scoreFunction(pix.g, rightNeighbor.g, k) &
-				scoreFunction(pix.b, rightNeighbor.b, k);
-
-			result[y][x] = res;
+			bool res = scoreFunction(pixel.r, top.r, left.r, k) &
+				scoreFunction(pixel.g, top.g, left.g, k) &
+				scoreFunction(pixel.b, top.b, left.b, k);
+			result[i][j] = res;
 		}
 	}
 
@@ -106,16 +81,16 @@ KeyPair evaluateXW(const std::vector<int32_t>& Fx)
 	size_t imax, jmax;
 	imax = jmax = 0;
 
-//#pragma omp parallel for
+#pragma omp parallel for
 	for (int32_t i = 0; i < Fx.size()-1; i++)
 	{
-//#pragma omp parallel for
+#pragma omp parallel for
 		for (int32_t j = i + 1; j < Fx.size()-1; j++)
 		{
 			int64_t res = 0;
 			res = sum(Fx.data() + i, Fx.data() + j + 1);
 			
-//#pragma omp critical
+#pragma omp critical
 			if (res > curMax)
 			{
 				curMax = res;
@@ -132,14 +107,24 @@ KeyPair evaluateXW(const std::vector<int32_t>& Fx)
 }
 
 
-void findKey(const BMPImage& img)
+void findKey(const BMPImage& img, uint8_t ks)
 {
 	std::vector<KeyTuple> keys;
 	std::vector<uint32_t> keyScores;
-	for (size_t k = 1; k != 2; k++)
+	uint8_t kbegin, kend;
+	if (ks)
 	{
-		if (8 % k)
-			continue;
+		kbegin = ks;
+		kend = ks + 1;
+	}
+	else
+	{
+		kbegin = 1;
+		kend = 5;
+	}
+	for (size_t k = (ks? ks : 1); k != (ks? ks+1 : 5); k++)
+	{
+		std::cout << "Search key for k=" << k << ":" << std::endl;
 		bitMap S = calculateBitmap(img, k);
 
 		std::vector<int32_t> Fx, Fy;
@@ -184,7 +169,7 @@ void findKey(const BMPImage& img)
 		std::cout << "And Fy's mean = " << ymean << " and deviation = " << ydeviation << std::endl;
 
 
-	/*	for (auto x = Fx.begin(); x != Fx.end(); x++)
+		for (auto x = Fx.begin(); x != Fx.end(); x++)
 		{
 				*x -= xmean;
 		}
@@ -192,10 +177,10 @@ void findKey(const BMPImage& img)
 		for (auto y = Fy.begin(); y != Fy.end(); y++)
 		{
 				*y -= ymean;
-		}*/
+		}
 
 
-	/*	KeyPair xw = evaluateXW(Fx);
+		KeyPair xw = evaluateXW(Fx);
 		KeyPair yh = evaluateXW(Fy);
 		KeyTuple curKey;
 		curKey.x = xw.first;
@@ -209,14 +194,14 @@ void findKey(const BMPImage& img)
 		uint32_t scoreY = sum(Fy.cbegin() + curKey.y, Fy.cbegin() + curKey.h + 1);
 
 		uint32_t score = std::pow(2, k) * (scoreX + scoreY);
-		keyScores.push_back(score);*/
+		keyScores.push_back(score);
 	}
 
 
 	for (size_t i = 0; i != keyScores.size(); i++)
 	{
 		if (keys[i].w && keys[i].h)
-			std::cout << keys[i] << "and scores " << keyScores[i] / (keys[i].w * keys[i].h) << std::endl;
+			std::cout << keys[i] << "and scores " << (double)keyScores[i] / (keys[i].w * keys[i].h) << std::endl;
 	}
 }
 
@@ -226,6 +211,7 @@ void findKey(const BMPImage& img)
 int main(int argc, char** argv)
 {
 	std::string fName, outfName;
+	unsigned int k;
 
 	try
 	{
@@ -233,7 +219,8 @@ int main(int argc, char** argv)
 		desc.add_options()
 			("help", "show this help message")
 			("input,i", opts::value<string>(&fName), "Image which will be checked")
-			("output,o", opts::value<string>(&outfName), "In this image we save result of work");
+			("output,o", opts::value<string>(&outfName), "In this image we save result of work")
+			("LSB-bits,k", opts::value<unsigned int>(&k)->default_value(0), "Count of bits used in LSB. If 0 - then we try to calculate over all available values");
 
 		opts::variables_map vm;
 		opts::store(opts::parse_command_line(argc, argv, desc), vm);
@@ -251,7 +238,7 @@ int main(int argc, char** argv)
 		}
 
 		BMPImage img(fName.c_str());
-		findKey(img);
+		findKey(img, k);
 	}
 	catch (std::exception& e)
 	{
