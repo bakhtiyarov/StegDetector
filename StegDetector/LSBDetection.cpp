@@ -38,9 +38,9 @@ inline uint8_t GetMostBits(uint8_t c, size_t k)
 bool scoreFunction(uint8_t p, uint8_t top, uint8_t left, size_t k)
 {
 	return (GetLeastBits(p, k) == GetLeastBits(left, k)) &&
-		//(GetLeastBits(p,k) == GetLeastBits(top,k)) &&
-		(GetMostBits(p, 8 - k) != GetMostBits(left, 8 - k));// &&
-//		(GetMostBits(p,8-k) != GetMostBits(top,8-k));
+		(GetLeastBits(p,k) == GetLeastBits(top,k)) &&
+		(GetMostBits(p, 8 - k) != GetMostBits(left, 8 - k)) &&
+		(GetMostBits(p,8-k) != GetMostBits(top,8-k));
 }
 
 //TODO: I need parallel version of this function
