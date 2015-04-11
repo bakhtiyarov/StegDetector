@@ -51,7 +51,7 @@ public:
 
 struct BMPImage
 {
-	size_t width, height;
+	uint32_t width, height;
 	//std::string filename;
 	uint8_t* planes[3];//R,G,B;
 

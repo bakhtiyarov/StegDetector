@@ -22,7 +22,7 @@ ImageSz getNewSize( uint32_t ContWidth, uint32_t contHeight, KeyTuple k, uint32_
 	double factor = (double)secretWidth / secretHeight;
 
 	uint64_t maxPixelCount = (k.w - k.x) * (k.h - k.y);// *k.k / 8;
-	if (maxPixelCount >= secretWidth * secretHeight)
+	if (maxPixelCount >= secretWidth * secretHeight + 8)
 		return ImageSz(secretWidth, secretHeight);
 	
 
@@ -168,23 +168,25 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 
 	uint64_t curSecretBit = 0;
 
-	//save dimensions of secret image into first bytes; TODO: may be should save all header of secret image?
+	//save width and height of image into green and blue channels of cover;
 	{
-		uint32_t w = secretToSave->width;
-		uint32_t h = secretToSave->height;
-		uint8_t* wp = (uint8_t*)&w;
-		uint8_t* hp = (uint8_t*)&h;
+		uint8_t* wp = (uint8_t*)&secretToSave->width;
+		uint8_t* hp = (uint8_t*)&secretToSave->height;
+		vector<bool> nextg, nextb;
 
-		secretToSave->planes[0][0] = *wp++;
-		secretToSave->planes[1][0] = *wp++;
-		secretToSave->planes[2][0] = *wp++;
-		secretToSave->planes[0][1] = *wp;
-		secretToSave->planes[1][1] = *hp++;
-		secretToSave->planes[2][1] = *hp++;
-		secretToSave->planes[0][2] = *hp++;
-		secretToSave->planes[1][2] = *hp;
-		secretToSave->planes[2][2] = 0;
+		for (int x = key.x; curSecretBit < 32; x++)
+		{
+			nextg = getBits(wp, curSecretBit, key.k);
+			nextb = getBits(hp, curSecretBit, key.k);
+			curSecretBit += key.k;
+			auto pixel = cover.getPixel(x, key.y);
+			setLSB(pixel.g, nextg);
+			setLSB(pixel.b, nextb);
+			cover.setPixel(x, key.y, pixel);
+		}
 	}
+
+	curSecretBit = 0;
 
 	//TODO: change curSecretBit to f(x,y) and make this loop parallel
 	for (size_t y = key.y; y != key.h; y++)
@@ -193,28 +195,19 @@ void createLSBImage(BMPImage& cover, BMPImage& secret, const KeyTuple& key, LsbM
 			break;
 		for (size_t x = key.x; x != key.w; x++)
 		{
+			if(y == 0 &&(x < 32 / key.k))
+				continue;
 			if (curSecretBit * 3 / 8 >= secretToSave->getSize())
 				break;
 
 			vector<bool> next1, next2, next3;
-			if (curSecretBit < 24)
-			{
-				next1 = getBits(secretToSave->planes[0], curSecretBit, key.k);
-				next2 = getBits(secretToSave->planes[1], curSecretBit, key.k);
-				next3 = getBits(secretToSave->planes[2], curSecretBit, key.k);
-				curSecretBit += key.k;
-			}
-			else
-			{
-				next1, next2, next3;
-				next1 = getBits(secretToSave->planes[0], curSecretBit, 8);
-				next2 = getBits(secretToSave->planes[1], curSecretBit, 8);
-				next3 = getBits(secretToSave->planes[2], curSecretBit, 8);
-				curSecretBit += 8;
-				next1.erase(next1.begin() + key.k, next1.end());
-				next2.erase(next2.begin() + key.k, next2.end());
-				next3.erase(next3.begin() + key.k, next3.end());
-			}
+			next1 = getBits(secretToSave->planes[0], curSecretBit, 8);
+			next2 = getBits(secretToSave->planes[1], curSecretBit, 8);
+			next3 = getBits(secretToSave->planes[2], curSecretBit, 8);
+			curSecretBit += 8;
+			next1.erase(next1.begin() + key.k, next1.end());
+			next2.erase(next2.begin() + key.k, next2.end());
+			next3.erase(next3.begin() + key.k, next3.end());
 
 			RgbPixel curPixel = cover.getPixel(x, y);
 			
@@ -265,22 +258,20 @@ static std::pair<uint32_t,uint32_t> getDimensions(const BMPImage& src, const Key
 	rY = gY = bY = key.y;
 
 
-	auto nb = getNextByte(rw, rX, rY, src.planes[0], key, src.width);
+	auto nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*p++, nb);
 	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*p++, nb);
-	nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
+	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*p++, nb);
-	nb = getNextByte(rw, rX, rY, src.planes[0], key, src.width);
+	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
 	setLSB(*p++, nb);
 
-	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
-	setLSB(*ph++, nb);
 	nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
 	setLSB(*ph++, nb);
-	nb = getNextByte(rw, rX, rY, src.planes[0], key, src.width);
-	setLSB(*ph++, nb);
-	nb = getNextByte(gw, gX, gY, src.planes[1], key, src.width);
+	nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
+	setLSB(*ph++, nb); nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
+	setLSB(*ph++, nb); nb = getNextByte(bw, bX, bY, src.planes[2], key, src.width);
 	setLSB(*ph++, nb);
 
 	return std::pair<uint32_t, uint32_t>(width, height);
@@ -332,11 +323,8 @@ void extractLSBImage(const BMPImage& src, BMPImage& result, const KeyTuple& key,
 		{
 			for (size_t x = key.x; x < key.w; x++)	//TODO: process padding to 32-bit boundaries
 			{
-				if (y == 0 && (x < 3))
-				{
-					data[p].insert(data[p].end(), 8, 0);
+				if (y == 0 && (x < 32/key.k))
 					continue;
-				}
 				auto d = getLSB(src.planes[p][y*src.width + x], key.k);
 				data[p].insert(data[p].end(), d.cbegin(), d.cend());
 				data[p].insert(data[p].end(), 8 - key.k, 0);
