@@ -107,10 +107,15 @@ KeyPair evaluateXW(const std::vector<int32_t>& Fx)
 }
 
 
-void findKey(const BMPImage& img, uint8_t ks)
+struct ScoredKeysList
 {
 	std::vector<KeyTuple> keys;
-	std::vector<uint32_t> keyScores;
+	std::vector<double> keyScores;
+};
+
+ScoredKeysList findKey(const BMPImage& img, uint8_t ks)
+{
+	ScoredKeysList keyList;
 	uint8_t kbegin, kend;
 	if (ks)
 	{
@@ -126,6 +131,7 @@ void findKey(const BMPImage& img, uint8_t ks)
 	{
 		std::cout << "Search key for k=" << k << ":" << std::endl;
 		bitMap S = calculateBitmap(img, k);
+
 
 		std::vector<int32_t> Fx, Fy;
 		Fx.resize(img.width);
@@ -165,8 +171,8 @@ void findKey(const BMPImage& img, uint8_t ks)
 		ydeviation /= Fy.size();
 		ydeviation = sqrt(ydeviation);
 
-		std::cout << "k = " << k << " and Fx's mean = " << xmean << " and deviation = " << xdeviation << std::endl;
-		std::cout << "And Fy's mean = " << ymean << " and deviation = " << ydeviation << std::endl;
+		//std::cout << "k = " << k << " and Fx's mean = " << xmean << " and deviation = " << xdeviation << std::endl;
+		//std::cout << "And Fy's mean = " << ymean << " and deviation = " << ydeviation << std::endl;
 
 
 		for (auto x = Fx.begin(); x != Fx.end(); x++)
@@ -189,20 +195,17 @@ void findKey(const BMPImage& img, uint8_t ks)
 		curKey.h = yh.second;
 		curKey.k = k;
 
-		keys.push_back(curKey);
+		//keys.push_back(curKey);
 		uint32_t scoreX = sum(Fx.cbegin() + curKey.x, Fx.cbegin() + curKey.w + 1);
 		uint32_t scoreY = sum(Fy.cbegin() + curKey.y, Fy.cbegin() + curKey.h + 1);
 
-		uint32_t score = std::pow(2, k) * (scoreX + scoreY);
-		keyScores.push_back(score);
+		double score = std::pow(2, k) * (scoreX + scoreY);
+		score /= (curKey.w - curKey.x) * (curKey.h - curKey.y);
+		keyList.keys.push_back(curKey);
+		keyList.keyScores.push_back(score);
 	}
 
-
-	for (size_t i = 0; i != keyScores.size(); i++)
-	{
-		if (keys[i].w && keys[i].h)
-			std::cout << keys[i] << "and scores " << (double)keyScores[i] / (keys[i].w * keys[i].h) << std::endl;
-	}
+	return keyList;
 }
 
 
@@ -238,7 +241,20 @@ int main(int argc, char** argv)
 		}
 
 		BMPImage img(fName.c_str());
-		findKey(img, k);
+		auto keys = findKey(img, k);
+
+		size_t maxScoredKeyIndex = 0;
+		double maxScore = 0;
+		for (size_t i = 0; i != keys.keys.size(); i++)
+		{
+			if (keys.keyScores[i] > maxScore)
+			{
+				maxScore = keys.keyScores[i];
+				maxScoredKeyIndex = i;
+			}
+
+			std::cout << keys.keys[i] << std::endl << "with score  = " << keys.keyScores[i] << std::endl << std::endl;
+		}
 	}
 	catch (std::exception& e)
 	{
